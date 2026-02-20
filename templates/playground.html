@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>graphlint playground</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --orange: #d29922;
+    --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-mono);
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  header h1 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  header .status {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  header .status.ok { color: var(--green); }
+  header .status.err { color: var(--red); }
+
+  .connection-bar {
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .connection-bar label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .connection-bar input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 4px 8px;
+    outline: none;
+  }
+
+  .connection-bar input:focus {
+    border-color: var(--accent);
+  }
+
+  .connection-bar input.bolt-uri { width: 260px; }
+  .connection-bar input.cred { width: 100px; }
+
+  .btn-validate {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 4px;
+    padding: 5px 14px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn-validate:hover { opacity: 0.85; }
+
+  .btn-validate:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .panels {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel + .panel {
+    border-left: 1px solid var(--border);
+  }
+
+  .panel-header {
+    padding: 8px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .panel-header .badge {
+    background: var(--border);
+    color: var(--text-dim);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+  }
+
+  #editor {
+    flex: 1;
+    width: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: none;
+    outline: none;
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    resize: none;
+    tab-size: 4;
+  }
+
+  .right-panel {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tabs {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .tab {
+    padding: 8px 16px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-content {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .tab-content.hidden { display: none; }
+
+  .check-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+
+  .check-card .check-id {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .check-card .check-type {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: 8px;
+  }
+
+  .check-card .check-msg {
+    font-size: 12px;
+    color: var(--text);
+    margin-top: 4px;
+  }
+
+  .severity-violation { border-left: 3px solid var(--red); }
+  .severity-warning { border-left: 3px solid var(--orange); }
+  .severity-info { border-left: 3px solid var(--accent); }
+
+  .error-box {
+    background: #2d1215;
+    border: 1px solid var(--red);
+    border-radius: 6px;
+    padding: 16px;
+    color: var(--red);
+    font-size: 13px;
+    white-space: pre-wrap;
+  }
+
+  .cypher-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .cypher-comment {
+    color: var(--text-dim);
+  }
+
+  .shape-group {
+    margin-bottom: 16px;
+  }
+
+  .shape-group h3 {
+    font-size: 12px;
+    color: var(--green);
+    margin-bottom: 8px;
+  }
+
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+
+  .result-pass { border-left: 3px solid var(--green); }
+  .result-fail { border-left: 3px solid var(--red); }
+  .result-warn { border-left: 3px solid var(--orange); }
+
+  .result-card .result-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .result-card .result-icon { font-size: 14px; }
+  .result-warn .result-icon { color: var(--orange); }
+  .result-card .result-id { font-weight: 600; color: var(--accent); }
+  .result-card .result-sev { font-size: 10px; color: var(--text-dim); }
+  .result-warn .result-sev { color: var(--orange); }
+  .result-card .result-msg { font-size: 12px; color: var(--text); margin-top: 4px; }
+
+  .result-card .violators {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .result-card .violators span {
+    display: block;
+    padding: 2px 0;
+  }
+
+  .result-vacuous {
+    border-left: 3px solid var(--border);
+    opacity: 0.5;
+  }
+
+  .result-vacuous .result-icon { color: var(--text-dim); }
+  .result-vacuous .result-id { color: var(--text-dim); }
+  .result-vacuous .result-msg { color: var(--text-dim); font-style: italic; }
+
+  .empty-shape-banner {
+    background: #2d2208;
+    border: 1px solid var(--orange);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--orange);
+  }
+
+  .empty-shape-banner strong { color: var(--text); }
+
+  .report-summary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+
+  .report-summary.conforms { border-left: 4px solid var(--green); }
+  .report-summary.violations { border-left: 4px solid var(--red); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>graphlint playground</h1>
+  <div class="status" id="status">ready</div>
+</header>
+
+<div class="connection-bar">
+  <label>bolt</label>
+  <input type="text" id="bolt-uri" class="bolt-uri" placeholder="bolt://localhost:7687" value="bolt://localhost:7687">
+  <label>user</label>
+  <input type="text" id="bolt-user" class="cred" placeholder="neo4j" value="neo4j">
+  <label>pass</label>
+  <input type="password" id="bolt-pass" class="cred" placeholder="password">
+  <label style="display:flex;align-items:center;gap:4px;margin-left:8px;cursor:pointer;">
+    <input type="checkbox" id="strict-mode" onchange="compile()">
+    <span>strict</span>
+  </label>
+  <button class="btn-validate" id="btn-validate" onclick="validate()">Validate</button>
+</div>
+
+<div class="panels">
+  <div class="panel">
+    <div class="panel-header">
+      <span>ShExC Schema</span>
+      <span class="badge">input</span>
+    </div>
+    <textarea id="editor" spellcheck="false"></textarea>
+  </div>
+
+  <div class="panel right-panel">
+    <div class="tabs">
+      <button class="tab active" data-tab="checks">Checks</button>
+      <button class="tab" data-tab="cypher">Cypher</button>
+      <button class="tab" data-tab="results">Results</button>
+      <button class="tab" data-tab="json">JSON</button>
+    </div>
+    <div class="tab-content" id="tab-checks"></div>
+    <div class="tab-content hidden" id="tab-cypher"></div>
+    <div class="tab-content hidden" id="tab-results"><div style="color:var(--text-dim)">Click Validate to run against a database</div></div>
+    <div class="tab-content hidden" id="tab-json"></div>
+  </div>
+</div>
+
+<script>
+const editor = document.getElementById('editor');
+const status = document.getElementById('status');
+const tabChecks = document.getElementById('tab-checks');
+const tabCypher = document.getElementById('tab-cypher');
+const tabResults = document.getElementById('tab-results');
+const tabJson = document.getElementById('tab-json');
+const btnValidate = document.getElementById('btn-validate');
+
+// Set example
+editor.value = {{ example_shexc | tojson }};
+
+// Tab switching
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+  document.getElementById('tab-' + name).classList.remove('hidden');
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+// Handle Tab key in editor
+editor.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
+    editor.selectionStart = editor.selectionEnd = start + 4;
+    compile();
+  }
+});
+
+// Debounced compile on input
+let timer = null;
+editor.addEventListener('input', () => {
+  clearTimeout(timer);
+  timer = setTimeout(compile, 400);
+});
+
+async function compile() {
+  const shexc = editor.value.trim();
+  if (!shexc) {
+    tabChecks.innerHTML = '';
+    tabCypher.textContent = '';
+    tabJson.textContent = '';
+    status.textContent = 'empty';
+    status.className = 'status';
+    return;
+  }
+
+  status.textContent = 'compiling...';
+  status.className = 'status';
+
+  try {
+    const res = await fetch('/api/compile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shexc, strict: document.getElementById('strict-mode').checked }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      status.textContent = 'error';
+      status.className = 'status err';
+      tabChecks.innerHTML = `<div class="error-box">${esc(data.error)}</div>`;
+      tabCypher.textContent = '';
+      tabJson.textContent = data.error;
+      return;
+    }
+
+    const plan = data.plan;
+    const checks = plan.checks || [];
+
+    status.textContent = `${checks.length} checks from ${plan.shapes.length} shapes`;
+    status.className = 'status ok';
+
+    renderChecks(checks, plan.shapes);
+    renderCypher(data.cypher);
+    tabJson.textContent = JSON.stringify(plan, null, 2);
+
+  } catch (err) {
+    status.textContent = 'fetch error';
+    status.className = 'status err';
+    tabChecks.innerHTML = `<div class="error-box">${esc(String(err))}</div>`;
+  }
+}
+
+async function validate() {
+  const shexc = editor.value.trim();
+  if (!shexc) return;
+
+  const boltUri = document.getElementById('bolt-uri').value.trim();
+  const username = document.getElementById('bolt-user').value.trim();
+  const password = document.getElementById('bolt-pass').value;
+
+  if (!boltUri) {
+    tabResults.innerHTML = '<div class="error-box">Enter a bolt URI</div>';
+    switchTab('results');
+    return;
+  }
+
+  btnValidate.disabled = true;
+  btnValidate.textContent = 'Validating...';
+  switchTab('results');
+  tabResults.innerHTML = '<div style="color:var(--text-dim)">Connecting to ' + esc(boltUri) + '...</div>';
+
+  try {
+    const res = await fetch('/api/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shexc, bolt_uri: boltUri, username, password, strict: document.getElementById('strict-mode').checked }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      tabResults.innerHTML = '<div class="error-box">' + esc(data.error) + '</div>';
+      return;
+    }
+
+    renderReport(data.report);
+  } catch (err) {
+    tabResults.innerHTML = '<div class="error-box">' + esc(String(err)) + '</div>';
+  } finally {
+    btnValidate.disabled = false;
+    btnValidate.textContent = 'Validate';
+  }
+}
+
+function renderReport(report) {
+  const s = report.summary;
+  const conformClass = report.conforms ? 'conforms' : 'violations';
+  const icon = report.conforms ? '\u2713' : '\u2717';
+  const label = report.conforms ? 'CONFORMS' : 'DOES NOT CONFORM';
+
+  let html = '';
+  html += '<div class="report-summary ' + conformClass + '">';
+  html += '<div style="font-size:16px;font-weight:600;margin-bottom:8px">' + icon + ' ' + label + '</div>';
+  html += '<div>' + s.checks_passed + '/' + s.checks_total + ' checks passed';
+  html += ' &middot; ' + s.violations + ' violations &middot; ' + s.warnings + ' warnings &middot; ' + s.info + ' info';
+  if (s.checks_vacuous > 0) {
+    html += ' &middot; ' + s.checks_vacuous + ' skipped (no data)';
+  }
+  html += '</div>';
+  html += '<div style="margin-top:4px;font-size:11px;color:var(--text-dim)">target: ' + esc(report.target || '') + ' &middot; ' + report.generated_at + '</div>';
+  html += '</div>';
+
+  for (const r of report.results) {
+    let cardClass;
+    if (r.vacuous) {
+      cardClass = 'result-vacuous';
+    } else if (r.passed) {
+      cardClass = 'result-pass';
+    } else if (r.severity === 'warning') {
+      cardClass = 'result-warn';
+    } else {
+      cardClass = 'result-fail';
+    }
+
+    const rIcon = r.vacuous ? '\u2014' : (r.passed ? '\u2713' : (r.severity === 'violation' ? '\u2717' : '\u26A0'));
+    html += '<div class="result-card ' + cardClass + '">';
+    html += '<div class="result-header">';
+    html += '<span class="result-icon">' + rIcon + '</span>';
+    html += '<span class="result-id">' + esc(r.check_id) + '</span>';
+    if (r.vacuous) {
+      html += '<span class="result-sev">SKIPPED</span>';
+    } else if (!r.passed) {
+      html += '<span class="result-sev">' + esc(r.severity.toUpperCase()) + '</span>';
+    }
+    html += '</div>';
+    html += '<div class="result-msg">' + esc(r.message) + (r.vacuous ? ' (no data)' : '') + '</div>';
+
+    if (r.violating_nodes && r.violating_nodes.length > 0) {
+      html += '<div class="violators">';
+      const violatorColor = r.severity === 'warning' ? 'var(--orange)' : 'var(--red)';
+      html += '<span style="color:' + violatorColor + '">' + r.violation_count + ' node(s) affected:</span>';
+      const show = r.violating_nodes.slice(0, 10);
+      for (const vn of show) {
+        const labels = vn.labels ? ':' + vn.labels.join(':') : '';
+        html += '<span>  \u2192 ' + esc(String(vn.node_id)) + ' ' + esc(labels) + '</span>';
+      }
+      if (r.violation_count > 10) {
+        html += '<span>  ... and ' + (r.violation_count - 10) + ' more</span>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  tabResults.innerHTML = html;
+}
+
+function renderChecks(checks, shapes) {
+  const groups = {};
+  for (const shape of shapes) {
+    const label = shape.split('#').pop() || shape.split('/').pop() || shape;
+    groups[label] = [];
+  }
+
+  for (const check of checks) {
+    const label = check.target_label || 'unknown';
+    if (!groups[label]) groups[label] = [];
+    groups[label].push(check);
+  }
+
+  let html = '';
+  for (const [label, groupChecks] of Object.entries(groups)) {
+    html += `<div class="shape-group">`;
+    html += `<h3>${esc(label)} (${groupChecks.length} checks)</h3>`;
+    for (const c of groupChecks) {
+      html += `<div class="check-card severity-${c.severity}">`;
+      html += `<span class="check-id">${esc(c.id)}</span>`;
+      html += `<span class="check-type">${esc(c.type)}</span>`;
+      html += `<div class="check-msg">${esc(c.message)}</div>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  tabChecks.innerHTML = html || '<div style="color:var(--text-dim)">No checks generated</div>';
+}
+
+function renderCypher(cypher) {
+  const lines = cypher.split('\n');
+  let html = '<div class="cypher-block">';
+  for (const line of lines) {
+    if (line.startsWith('--')) {
+      html += `<span class="cypher-comment">${esc(line)}</span>\n`;
+    } else {
+      html += esc(line) + '\n';
+    }
+  }
+  html += '</div>';
+  tabCypher.innerHTML = html;
+}
+
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Initial compile
+compile();
+</script>
+
+</body>
+</html>
