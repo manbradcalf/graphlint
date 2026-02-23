@@ -1,5 +1,5 @@
 """
-graphlint playground — Interactive web UI for testing ShExC schemas.
+graphlint playground — Interactive web UI for testing ShExC and SHACL schemas.
 
 Run with: uv run python playground.py
 """
@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from graphlint.parser import parse_shexc_to_plan
+from graphlint.parser import parse_schema, _detect_schema_format
 from graphlint.backends.cypher import CypherBackend
 from graphlint.runner import dry_run, execute_plan
 
@@ -50,14 +50,55 @@ ex:Review {
 }
 """
 
+EXAMPLE_SHACL = """\
+@prefix ex:  <http://example.org/movies#> .
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+ex:MovieShape
+    a sh:NodeShape ;
+    sh:targetClass ex:Movie ;
+    sh:property [ sh:path ex:title ;     sh:datatype xsd:string ;  sh:minCount 1 ] ;
+    sh:property [ sh:path ex:released ;  sh:datatype xsd:integer ; sh:minCount 1 ] ;
+    sh:property [ sh:path ex:tagline ;   sh:datatype xsd:string ] ;
+    sh:property [ sh:path ex:hasActor ;  sh:nodeKind sh:IRI ; sh:node ex:PersonShape ; sh:minCount 1 ] ;
+    sh:property [ sh:path ex:hasDirector ; sh:nodeKind sh:IRI ; sh:node ex:PersonShape ; sh:minCount 1 ; sh:maxCount 1 ] ;
+    sh:property [ sh:path ex:inGenre ;   sh:nodeKind sh:IRI ; sh:node ex:GenreShape ;  sh:minCount 1 ] .
+
+ex:PersonShape
+    a sh:NodeShape ;
+    sh:targetClass ex:Person ;
+    sh:property [ sh:path ex:name ;        sh:datatype xsd:string ;  sh:minCount 1 ] ;
+    sh:property [ sh:path ex:born ;        sh:datatype xsd:integer ] ;
+    sh:property [ sh:path ex:nationality ; sh:datatype xsd:string ] .
+
+ex:GenreShape
+    a sh:NodeShape ;
+    sh:targetClass ex:Genre ;
+    sh:property [ sh:path ex:name ;   sh:datatype xsd:string ; sh:minCount 1 ] ;
+    sh:property [ sh:path ex:rating ; sh:in ( "G" "PG" "PG-13" "R" "NC-17" ) ] .
+
+ex:ReviewShape
+    a sh:NodeShape ;
+    sh:targetClass ex:Review ;
+    sh:property [ sh:path ex:score ;     sh:datatype xsd:float ;   sh:minCount 1 ] ;
+    sh:property [ sh:path ex:summary ;   sh:datatype xsd:string ;  sh:minCount 1 ] ;
+    sh:property [ sh:path ex:reviewOf ;  sh:nodeKind sh:IRI ; sh:node ex:MovieShape ;  sh:minCount 1 ; sh:maxCount 1 ] ;
+    sh:property [ sh:path ex:writtenBy ; sh:nodeKind sh:IRI ; sh:node ex:PersonShape ; sh:maxCount 1 ] .
+"""
+
 
 class CompileRequest(BaseModel):
-    shexc: str
+    schema: str = ""
+    shexc: str = ""  # backward compat
+    format: str = "auto"
     strict: bool = False
 
 
 class ValidateRequest(BaseModel):
-    shexc: str
+    schema: str = ""
+    shexc: str = ""  # backward compat
+    format: str = "auto"
     bolt_uri: str
     username: str = "neo4j"
     password: str = ""
@@ -65,12 +106,21 @@ class ValidateRequest(BaseModel):
     strict: bool = False
 
 
+def _schema_text(req) -> str:
+    return req.schema or req.shexc
+
+
+def _format_arg(req) -> str | None:
+    return None if req.format == "auto" else req.format
+
+
 @app.post("/api/validate")
 def validate_schema(req: ValidateRequest):
     try:
         from neo4j import GraphDatabase
 
-        plan = parse_shexc_to_plan(req.shexc, source="<playground>", strict=req.strict)
+        text = _schema_text(req)
+        plan = parse_schema(text, source="<playground>", strict=req.strict, format=_format_arg(req))
         backend = CypherBackend()
         driver = GraphDatabase.driver(req.bolt_uri, auth=(req.username, req.password))
         report = execute_plan(
@@ -87,13 +137,16 @@ def validate_schema(req: ValidateRequest):
 @app.post("/api/compile")
 def compile_schema(req: CompileRequest):
     try:
-        plan = parse_shexc_to_plan(req.shexc, source="<playground>", strict=req.strict)
+        text = _schema_text(req)
+        detected = _detect_schema_format(text)
+        plan = parse_schema(text, source="<playground>", strict=req.strict, format=_format_arg(req))
         backend = CypherBackend()
         cypher = dry_run(plan, backend)
         return {
             "ok": True,
             "plan": plan.to_dict(),
             "cypher": cypher,
+            "detected_format": detected,
         }
     except Exception as e:
         return {
@@ -106,7 +159,11 @@ def compile_schema(req: CompileRequest):
 def index(request: Request):
     return templates.TemplateResponse(
         "playground.html",
-        {"request": request, "example_shexc": EXAMPLE_SHEXC},
+        {
+            "request": request,
+            "example_shexc": EXAMPLE_SHEXC,
+            "example_shacl": EXAMPLE_SHACL,
+        },
     )
 
 

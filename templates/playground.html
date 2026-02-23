@@ -88,6 +88,43 @@
   .connection-bar input.bolt-uri { width: 260px; }
   .connection-bar input.cred { width: 100px; }
 
+  .connection-bar select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 4px 8px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .connection-bar select:focus {
+    border-color: var(--accent);
+  }
+
+  .btn-example {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 4px 8px;
+    cursor: pointer;
+  }
+
+  .btn-example:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  .btn-example.active {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
   .btn-validate {
     background: var(--accent);
     color: var(--bg);
@@ -347,12 +384,18 @@
 </header>
 
 <div class="connection-bar">
-  <label>bolt</label>
-  <input type="text" id="bolt-uri" class="bolt-uri" placeholder="bolt://localhost:7687" value="bolt://localhost:7687">
+  <label>uri</label>
+  <input type="text" id="bolt-uri" class="bolt-uri" placeholder="neo4j://localhost:7687" value="neo4j://localhost:7687">
   <label>user</label>
   <input type="text" id="bolt-user" class="cred" placeholder="neo4j" value="neo4j">
   <label>pass</label>
   <input type="password" id="bolt-pass" class="cred" placeholder="password">
+  <label>format</label>
+  <select id="schema-format" onchange="compile()">
+    <option value="auto">auto</option>
+    <option value="shexc">ShExC</option>
+    <option value="shacl">SHACL</option>
+  </select>
   <label style="display:flex;align-items:center;gap:4px;margin-left:8px;cursor:pointer;">
     <input type="checkbox" id="strict-mode" onchange="compile()">
     <span>strict</span>
@@ -363,8 +406,11 @@
 <div class="panels">
   <div class="panel">
     <div class="panel-header">
-      <span>ShExC Schema</span>
-      <span class="badge">input</span>
+      <span>Schema</span>
+      <span style="display:flex;gap:4px;">
+        <button class="btn-example active" id="btn-shexc" onclick="loadExample('shexc')">ShExC</button>
+        <button class="btn-example" id="btn-shacl" onclick="loadExample('shacl')">SHACL</button>
+      </span>
     </div>
     <textarea id="editor" spellcheck="false"></textarea>
   </div>
@@ -392,8 +438,20 @@ const tabResults = document.getElementById('tab-results');
 const tabJson = document.getElementById('tab-json');
 const btnValidate = document.getElementById('btn-validate');
 
-// Set example
-editor.value = {{ example_shexc | tojson }};
+// Examples
+const EXAMPLE_SHEXC = {{ example_shexc | tojson }};
+const EXAMPLE_SHACL = {{ example_shacl | tojson }};
+
+// Set initial example
+editor.value = EXAMPLE_SHEXC;
+
+function loadExample(fmt) {
+  editor.value = fmt === 'shacl' ? EXAMPLE_SHACL : EXAMPLE_SHEXC;
+  document.getElementById('schema-format').value = fmt;
+  document.getElementById('btn-shexc').classList.toggle('active', fmt === 'shexc');
+  document.getElementById('btn-shacl').classList.toggle('active', fmt === 'shacl');
+  compile();
+}
 
 // Tab switching
 function switchTab(name) {
@@ -428,8 +486,8 @@ editor.addEventListener('input', () => {
 });
 
 async function compile() {
-  const shexc = editor.value.trim();
-  if (!shexc) {
+  const schema = editor.value.trim();
+  if (!schema) {
     tabChecks.innerHTML = '';
     tabCypher.textContent = '';
     tabJson.textContent = '';
@@ -445,7 +503,7 @@ async function compile() {
     const res = await fetch('/api/compile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shexc, strict: document.getElementById('strict-mode').checked }),
+      body: JSON.stringify({ schema: schema, format: document.getElementById('schema-format').value, strict: document.getElementById('strict-mode').checked }),
     });
     const data = await res.json();
 
@@ -461,7 +519,8 @@ async function compile() {
     const plan = data.plan;
     const checks = plan.checks || [];
 
-    status.textContent = `${checks.length} checks from ${plan.shapes.length} shapes`;
+    const fmtLabel = data.detected_format ? ` [${data.detected_format}]` : '';
+    status.textContent = `${checks.length} checks from ${plan.shapes.length} shapes${fmtLabel}`;
     status.className = 'status ok';
 
     renderChecks(checks, plan.shapes);
@@ -476,15 +535,15 @@ async function compile() {
 }
 
 async function validate() {
-  const shexc = editor.value.trim();
-  if (!shexc) return;
+  const schema = editor.value.trim();
+  if (!schema) return;
 
   const boltUri = document.getElementById('bolt-uri').value.trim();
   const username = document.getElementById('bolt-user').value.trim();
   const password = document.getElementById('bolt-pass').value;
 
   if (!boltUri) {
-    tabResults.innerHTML = '<div class="error-box">Enter a bolt URI</div>';
+    tabResults.innerHTML = '<div class="error-box">Enter a database URI</div>';
     switchTab('results');
     return;
   }
@@ -498,7 +557,7 @@ async function validate() {
     const res = await fetch('/api/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shexc, bolt_uri: boltUri, username, password, strict: document.getElementById('strict-mode').checked }),
+      body: JSON.stringify({ schema: schema, format: document.getElementById('schema-format').value, bolt_uri: boltUri, username, password, strict: document.getElementById('strict-mode').checked }),
     });
     const data = await res.json();
 

@@ -11,6 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pyshexc",
     "ShExJSG",
+    "rdflib>=7.0",
     "neo4j",
     "fastapi>=0.129.0",
     "uvicorn>=0.41.0",

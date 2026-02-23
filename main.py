@@ -1,9 +1,10 @@
-from graphlint.parser import parse_shexc_to_plan
+from graphlint.parser import parse_schema
 from graphlint.backends.cypher import CypherBackend
 from graphlint.runner import dry_run
 
+# ShExC example (also supports SHACL — try examples/movies.shacl.ttl)
 with open("examples/movies.shex") as f:
-    shexc = f.read()
+    schema = f.read()
 
-plan = parse_shexc_to_plan(shexc, source="movies.shex")
+plan = parse_schema(schema, source="movies.shex")
 print(dry_run(plan, CypherBackend()))
