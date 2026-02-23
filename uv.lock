@@ -94,6 +94,7 @@ dependencies = [
     { name = "jinja2" },
     { name = "neo4j" },
     { name = "pyshexc" },
+    { name = "rdflib" },
     { name = "shexjsg" },
     { name = "uvicorn" },
 ]
@@ -109,6 +110,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "neo4j" },
     { name = "pyshexc" },
+    { name = "rdflib", specifier = ">=7.0" },
     { name = "shexjsg" },
     { name = "uvicorn", specifier = ">=0.41.0" },
 ]

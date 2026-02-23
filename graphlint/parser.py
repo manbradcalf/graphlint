@@ -477,3 +477,39 @@ def _generate_strict_checks(
         ))
 
     return strict_checks
+
+
+# ─── Unified entry point ────────────────────────────────────────────
+
+
+def _detect_schema_format(text: str) -> str:
+    """Detect schema format: 'shexc' or 'shacl'."""
+    shacl_signals = [
+        "sh:NodeShape",
+        "sh:targetClass",
+        "sh:property",
+        "<http://www.w3.org/ns/shacl#",
+    ]
+    for signal in shacl_signals:
+        if signal in text:
+            return "shacl"
+    return "shexc"
+
+
+def parse_schema(
+    schema: str,
+    mapping: Optional[Mapping] = None,
+    source: str = "<string>",
+    strict: bool = False,
+    format: Optional[str] = None,
+) -> ValidationPlan:
+    """Parse a schema string (ShExC or SHACL/Turtle) into a ValidationPlan.
+
+    If format is None, auto-detects based on content.
+    """
+    fmt = format or _detect_schema_format(schema)
+    if fmt == "shacl":
+        from graphlint.shacl_parser import parse_shacl_to_plan
+        return parse_shacl_to_plan(schema, mapping=mapping, source=source, strict=strict)
+    else:
+        return parse_shexc_to_plan(schema, mapping=mapping, source=source, strict=strict)
