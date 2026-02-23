@@ -13,7 +13,6 @@ ex:MovieShape
         sh:path     ex:title ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
-        sh:pattern  "^[A-Z]" ;
     ] ;
 
     sh:property [
@@ -55,7 +54,6 @@ ex:MovieShape
         sh:nodeKind sh:IRI ;
         sh:node     ex:PersonShape ;
         sh:minCount 1 ;
-        sh:maxCount 1 ;
     ] ;
 
     sh:property [
@@ -63,6 +61,11 @@ ex:MovieShape
         sh:nodeKind sh:IRI ;
         sh:node     ex:GenreShape ;
         sh:minCount 1 ;
+    ] ;
+
+    sh:property [
+        sh:path     ex:rating ;
+        sh:in       ( "G" "PG" "PG-13" "R" "NC-17" ) ;
     ] .
 
 # ── Person ───────────────────────────────────────────────────────────
@@ -92,7 +95,6 @@ ex:PersonShape
         sh:path     [ sh:inversePath ex:hasActor ] ;
         sh:nodeKind sh:IRI ;
         sh:node     ex:MovieShape ;
-        sh:minCount 1 ;
     ] ;
 
     sh:or (
@@ -112,11 +114,6 @@ ex:GenreShape
         sh:path     ex:name ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
-    ] ;
-
-    sh:property [
-        sh:path     ex:rating ;
-        sh:in       ( "G" "PG" "PG-13" "R" "NC-17" ) ;
     ] .
 
 # ── Review ───────────────────────────────────────────────────────────
