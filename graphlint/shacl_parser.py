@@ -10,9 +10,9 @@ from __future__ import annotations
 import warnings
 from typing import Optional
 
-from rdflib import Graph, URIRef, Literal as RDFLiteral, BNode, RDF
+from rdflib import Graph, URIRef, Literal as RDFLiteral, RDF
 from rdflib.collection import Collection
-from rdflib.namespace import SH, XSD as RDF_XSD
+from rdflib.namespace import SH
 
 from graphlint.parser import (
     Check,

@@ -384,8 +384,8 @@
 </header>
 
 <div class="connection-bar">
-  <label>bolt</label>
-  <input type="text" id="bolt-uri" class="bolt-uri" placeholder="bolt://localhost:7687" value="bolt://localhost:7687">
+  <label>uri</label>
+  <input type="text" id="bolt-uri" class="bolt-uri" placeholder="neo4j://localhost:7687" value="neo4j://localhost:7687">
   <label>user</label>
   <input type="text" id="bolt-user" class="cred" placeholder="neo4j" value="neo4j">
   <label>pass</label>
@@ -486,8 +486,8 @@ editor.addEventListener('input', () => {
 });
 
 async function compile() {
-  const shexc = editor.value.trim();
-  if (!shexc) {
+  const schema = editor.value.trim();
+  if (!schema) {
     tabChecks.innerHTML = '';
     tabCypher.textContent = '';
     tabJson.textContent = '';
@@ -503,7 +503,7 @@ async function compile() {
     const res = await fetch('/api/compile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schema: shexc, format: document.getElementById('schema-format').value, strict: document.getElementById('strict-mode').checked }),
+      body: JSON.stringify({ schema: schema, format: document.getElementById('schema-format').value, strict: document.getElementById('strict-mode').checked }),
     });
     const data = await res.json();
 
@@ -535,15 +535,15 @@ async function compile() {
 }
 
 async function validate() {
-  const shexc = editor.value.trim();
-  if (!shexc) return;
+  const schema = editor.value.trim();
+  if (!schema) return;
 
   const boltUri = document.getElementById('bolt-uri').value.trim();
   const username = document.getElementById('bolt-user').value.trim();
   const password = document.getElementById('bolt-pass').value;
 
   if (!boltUri) {
-    tabResults.innerHTML = '<div class="error-box">Enter a bolt URI</div>';
+    tabResults.innerHTML = '<div class="error-box">Enter a database URI</div>';
     switchTab('results');
     return;
   }
@@ -557,7 +557,7 @@ async function validate() {
     const res = await fetch('/api/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schema: shexc, format: document.getElementById('schema-format').value, bolt_uri: boltUri, username, password, strict: document.getElementById('strict-mode').checked }),
+      body: JSON.stringify({ schema: schema, format: document.getElementById('schema-format').value, bolt_uri: boltUri, username, password, strict: document.getElementById('strict-mode').checked }),
     });
     const data = await res.json();
 

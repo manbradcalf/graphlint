@@ -1,8 +1,8 @@
 """
-graphlint.parser — Parse ShExC schemas into a validation plan (IR).
+graphlint.parser — Parse graph schemas into a validation plan (IR).
 
-Takes a ShExC string or file, parses it via pyshexc into ShExJ AST,
-then walks the AST to produce a list of Check objects.
+Supports ShExC (via pyshexc) and SHACL/Turtle (via rdflib). The unified
+entry point is parse_schema(), which auto-detects the format.
 """
 
 from __future__ import annotations
