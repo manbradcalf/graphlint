@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from pyshexc.parser_impl.generate_shexj import parse as parse_shexc
 
 
@@ -27,6 +27,10 @@ class CheckType(str, Enum):
     PROPERTY_EXISTS = "property_exists"
     PROPERTY_TYPE = "property_type"
     PROPERTY_VALUE_IN = "property_value_in"
+    PROPERTY_PATTERN = "property_pattern"
+    PROPERTY_STRING_LENGTH = "property_string_length"
+    PROPERTY_RANGE = "property_range"
+    PROPERTY_PAIR = "property_pair"
     RELATIONSHIP_CARDINALITY = "relationship_cardinality"
     RELATIONSHIP_ENDPOINT = "relationship_endpoint"
     CLOSED_SHAPE = "closed_shape"
@@ -34,6 +38,12 @@ class CheckType(str, Enum):
     UNDECLARED_RELATIONSHIP_TYPES = "undeclared_relationship_types"
     UNDECLARED_PROPERTIES = "undeclared_properties"
     EMPTY_SHAPE = "empty_shape"
+    QUALIFIED_CARDINALITY = "qualified_cardinality"
+    LOGICAL_NOT = "logical_not"
+    LOGICAL_AND = "logical_and"
+    LOGICAL_OR = "logical_or"
+    LOGICAL_XONE = "logical_xone"
+    UNIQUE_LANG = "unique_lang"
 
 
 @dataclass
@@ -63,11 +73,41 @@ class Check:
     # Closed shape
     allowed_properties: Optional[list[str]] = None
     allowed_relationships: Optional[list[str]] = None
+    # Pattern (sh:pattern)
+    pattern: Optional[str] = None
+    pattern_flags: Optional[str] = None
+    # String length (sh:minLength, sh:maxLength)
+    min_length: Optional[int] = None
+    max_length: Optional[int] = None
+    # Numeric range (sh:minInclusive, sh:maxInclusive, sh:minExclusive, sh:maxExclusive)
+    min_inclusive: Optional[float] = None
+    max_inclusive: Optional[float] = None
+    min_exclusive: Optional[float] = None
+    max_exclusive: Optional[float] = None
+    # Property pair (sh:equals, sh:disjoint, sh:lessThan, sh:lessThanOrEquals)
+    compare_property: Optional[str] = None
+    comparison_type: Optional[str] = None  # "equals", "disjoint", "lessThan", "lessThanOrEquals"
+    # Class hierarchy (sh:class with rdfs:subClassOf)
+    acceptable_labels: Optional[list[str]] = None
+    # Qualified cardinality (sh:qualifiedValueShape)
+    qualified_filter: Optional["Check"] = None
+    qualified_min: Optional[int] = None
+    qualified_max: Optional[int] = None
+    # Logical constraints (sh:not, sh:and, sh:or, sh:xone)
+    sub_checks: Optional[list["Check"]] = None
+    # Annotation properties
+    default_value: Optional[Any] = None
+    display_order: Optional[int] = None
 
     def to_dict(self) -> dict:
         d = asdict(self)
         d["type"] = self.type.value
         d["severity"] = self.severity.value
+        # Handle nested Check objects
+        if self.qualified_filter is not None:
+            d["qualified_filter"] = self.qualified_filter.to_dict()
+        if self.sub_checks is not None:
+            d["sub_checks"] = [sc.to_dict() for sc in self.sub_checks]
         return {k: v for k, v in d.items() if v is not None}
 
 

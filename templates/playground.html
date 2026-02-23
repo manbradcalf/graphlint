@@ -408,8 +408,8 @@
     <div class="panel-header">
       <span>Schema</span>
       <span style="display:flex;gap:4px;">
-        <button class="btn-example active" id="btn-shexc" onclick="loadExample('shexc')">ShExC</button>
-        <button class="btn-example" id="btn-shacl" onclick="loadExample('shacl')">SHACL</button>
+        <button class="btn-example" id="btn-shexc" onclick="loadExample('shexc')">ShExC</button>
+        <button class="btn-example active" id="btn-shacl" onclick="loadExample('shacl')">SHACL</button>
       </span>
     </div>
     <textarea id="editor" spellcheck="false"></textarea>
@@ -443,7 +443,8 @@ const EXAMPLE_SHEXC = {{ example_shexc | tojson }};
 const EXAMPLE_SHACL = {{ example_shacl | tojson }};
 
 // Set initial example
-editor.value = EXAMPLE_SHEXC;
+editor.value = EXAMPLE_SHACL;
+document.getElementById('schema-format').value = 'shacl';
 
 function loadExample(fmt) {
   editor.value = fmt === 'shacl' ? EXAMPLE_SHACL : EXAMPLE_SHEXC;
