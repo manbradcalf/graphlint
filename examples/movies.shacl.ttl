@@ -1,6 +1,7 @@
-@prefix ex:  <http://example.org/movies#> .
-@prefix sh:  <http://www.w3.org/ns/shacl#> .
-@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix ex:   <http://example.org/movies#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 
 # ── Movie ────────────────────────────────────────────────────────────
 
@@ -18,11 +19,27 @@ ex:MovieShape
         sh:path     ex:released ;
         sh:datatype xsd:integer ;
         sh:minCount 1 ;
+        sh:minInclusive 1888 ;
+        sh:maxInclusive 2100 ;
     ] ;
 
     sh:property [
         sh:path     ex:tagline ;
         sh:datatype xsd:string ;
+        sh:maxLength 500 ;
+    ] ;
+
+    sh:property [
+        sh:path          ex:announcedYear ;
+        sh:datatype      xsd:integer ;
+        sh:lessThan      ex:released ;
+    ] ;
+
+    sh:not [
+        sh:property [
+            sh:path     ex:tagline ;
+            sh:hasValue "TBD" ;
+        ] ;
     ] ;
 
     sh:property [
@@ -37,7 +54,6 @@ ex:MovieShape
         sh:nodeKind sh:IRI ;
         sh:node     ex:PersonShape ;
         sh:minCount 1 ;
-        sh:maxCount 1 ;
     ] ;
 
     sh:property [
@@ -45,6 +61,11 @@ ex:MovieShape
         sh:nodeKind sh:IRI ;
         sh:node     ex:GenreShape ;
         sh:minCount 1 ;
+    ] ;
+
+    sh:property [
+        sh:path     ex:rating ;
+        sh:in       ( "G" "PG" "PG-13" "R" "NC-17" ) ;
     ] .
 
 # ── Person ───────────────────────────────────────────────────────────
@@ -57,6 +78,7 @@ ex:PersonShape
         sh:path     ex:name ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
+        sh:minLength 2 ;
     ] ;
 
     sh:property [
@@ -67,23 +89,31 @@ ex:PersonShape
     sh:property [
         sh:path     ex:nationality ;
         sh:datatype xsd:string ;
-    ] .
+    ] ;
+
+    sh:property [
+        sh:path     [ sh:inversePath ex:hasActor ] ;
+        sh:nodeKind sh:IRI ;
+        sh:node     ex:MovieShape ;
+    ] ;
+
+    sh:or (
+        [ sh:property [ sh:path ex:born ; sh:minCount 1 ] ]
+        [ sh:property [ sh:path ex:nationality ; sh:minCount 1 ] ]
+    ) .
 
 # ── Genre ────────────────────────────────────────────────────────────
 
 ex:GenreShape
     a sh:NodeShape ;
     sh:targetClass ex:Genre ;
+    sh:closed true ;
+    sh:ignoredProperties ( ex:internalId ) ;
 
     sh:property [
         sh:path     ex:name ;
         sh:datatype xsd:string ;
         sh:minCount 1 ;
-    ] ;
-
-    sh:property [
-        sh:path     ex:rating ;
-        sh:in       ( "G" "PG" "PG-13" "R" "NC-17" ) ;
     ] .
 
 # ── Review ───────────────────────────────────────────────────────────
@@ -93,9 +123,11 @@ ex:ReviewShape
     sh:targetClass ex:Review ;
 
     sh:property [
-        sh:path     ex:score ;
-        sh:datatype xsd:float ;
-        sh:minCount 1 ;
+        sh:path         ex:score ;
+        sh:datatype     xsd:float ;
+        sh:minCount     1 ;
+        sh:minExclusive 0.0 ;
+        sh:maxExclusive 10.0 ;
     ] ;
 
     sh:property [

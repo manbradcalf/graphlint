@@ -390,6 +390,11 @@
   <input type="text" id="bolt-user" class="cred" placeholder="neo4j" value="neo4j">
   <label>pass</label>
   <input type="password" id="bolt-pass" class="cred" placeholder="password">
+  <label>database</label>
+  <select id="database-type" onchange="compile()">
+    <option value="neo4j">Neo4j</option>
+    <option value="memgraph">Memgraph</option>
+  </select>
   <label>format</label>
   <select id="schema-format" onchange="compile()">
     <option value="auto">auto</option>
@@ -408,8 +413,8 @@
     <div class="panel-header">
       <span>Schema</span>
       <span style="display:flex;gap:4px;">
-        <button class="btn-example active" id="btn-shexc" onclick="loadExample('shexc')">ShExC</button>
-        <button class="btn-example" id="btn-shacl" onclick="loadExample('shacl')">SHACL</button>
+        <button class="btn-example" id="btn-shexc" onclick="loadExample('shexc')">ShExC</button>
+        <button class="btn-example active" id="btn-shacl" onclick="loadExample('shacl')">SHACL</button>
       </span>
     </div>
     <textarea id="editor" spellcheck="false"></textarea>
@@ -443,7 +448,8 @@ const EXAMPLE_SHEXC = {{ example_shexc | tojson }};
 const EXAMPLE_SHACL = {{ example_shacl | tojson }};
 
 // Set initial example
-editor.value = EXAMPLE_SHEXC;
+editor.value = EXAMPLE_SHACL;
+document.getElementById('schema-format').value = 'shacl';
 
 function loadExample(fmt) {
   editor.value = fmt === 'shacl' ? EXAMPLE_SHACL : EXAMPLE_SHEXC;
@@ -503,7 +509,7 @@ async function compile() {
     const res = await fetch('/api/compile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schema: schema, format: document.getElementById('schema-format').value, strict: document.getElementById('strict-mode').checked }),
+      body: JSON.stringify({ schema: schema, format: document.getElementById('schema-format').value, strict: document.getElementById('strict-mode').checked, database_type: document.getElementById('database-type').value }),
     });
     const data = await res.json();
 
@@ -557,7 +563,7 @@ async function validate() {
     const res = await fetch('/api/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schema: schema, format: document.getElementById('schema-format').value, bolt_uri: boltUri, username, password, strict: document.getElementById('strict-mode').checked }),
+      body: JSON.stringify({ schema: schema, format: document.getElementById('schema-format').value, bolt_uri: boltUri, username, password, strict: document.getElementById('strict-mode').checked, database_type: document.getElementById('database-type').value }),
     });
     const data = await res.json();
 

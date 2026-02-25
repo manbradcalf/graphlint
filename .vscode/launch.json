@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "python",
+      "request": "launch",
+      "name": "Playground",
+      "module": "uvicorn",
+      "args": ["playground:app", "--host", "127.0.0.1", "--port", "8420"],
+      "subProcess": false,
+      "justMyCode": false
+    }
+  ]
+}

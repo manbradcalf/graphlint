@@ -228,6 +228,32 @@ In short:
 - **In scope:** LPG data ↔ schema constraint checking
 - **Out of scope:** schema document validation, SHACL meta-validation, ShExC syntax linting
 
+## Roadmap
+
+graphlint aims to be a practical bridge between formal graph schemas and
+real-world graph databases. Some features are not yet implemented:
+
+**Planned**
+- Gremlin backend (Amazon Neptune, JanusGraph)
+- SPARQL backend for RDF stores
+- Schema-level validation (meta-SHACL, ShExC syntax checking)
+- Complex SHACL paths (`sh:alternativePath`, sequence paths, `sh:zeroOrMorePath`, `sh:oneOrMorePath`)
+
+**LPG–RDF gap**
+Some SHACL/ShEx features assume RDF semantics that don't exist natively
+in labeled property graphs:
+
+| Feature | RDF Concept | LPG Status |
+|---------|------------|------------|
+| `sh:uniqueLang` | Language-tagged literals | No equivalent in LPG — acknowledged but not enforced |
+| `rdfs:subClassOf` traversal | Class hierarchies | Supported when declared in the SHACL file; no runtime inference |
+| Blank node shapes | Anonymous resources | LPG nodes always have identity |
+| Named graphs / `sh:shapesGraph` | RDF datasets | Single-graph validation only |
+
+These gaps reflect fundamental modeling differences between RDF and LPG,
+not missing features. graphlint documents them transparently so users
+from either community can make informed decisions.
+
 ## Status
 
 Early prototype. The core pipeline works: parse ShExC or SHACL, compile to
