@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Optional
 
-from graphlint.parser import ValidationPlan, Check, Severity
+from graphlint.parser import ValidationPlan, Check, CheckType, Severity
 from graphlint.backends import Backend
 
 
@@ -188,6 +188,24 @@ def execute_plan(
     }
     empty_labels: set[str] = set()
 
+    # Check types where "pass" is meaningless if no nodes have the property
+    _PROPERTY_VACUOUS_TYPES = {
+        CheckType.PROPERTY_TYPE,
+        CheckType.PROPERTY_VALUE_IN,
+        CheckType.PROPERTY_PATTERN,
+        CheckType.PROPERTY_STRING_LENGTH,
+        CheckType.PROPERTY_RANGE,
+        CheckType.PROPERTY_PAIR,
+    }
+
+    # Collect (label, property) pairs that need property-level vacancy checks
+    label_props: set[tuple[str, str]] = set()
+    for check, _ in compiled:
+        if check.type in _PROPERTY_VACUOUS_TYPES and check.property:
+            label_props.add((check.target_label, check.property))
+
+    empty_props: set[tuple[str, str]] = set()
+
     with driver.session(database=database) as session:
         for label in declared_labels:
             count_result = session.run(
@@ -196,11 +214,26 @@ def execute_plan(
             if count_result and count_result["cnt"] == 0:
                 empty_labels.add(label)
 
+        # Check property-level vacancy (only for labels that have nodes)
+        for label, prop in label_props:
+            if label in empty_labels:
+                continue
+            prop_result = session.run(
+                f"MATCH (n:{label}) WHERE n.{prop} IS NOT NULL "
+                f"RETURN count(n) AS cnt"
+            ).single()
+            if prop_result and prop_result["cnt"] == 0:
+                empty_props.add((label, prop))
+
         for check, query in compiled:
-            # Determine if this check is vacuous (target label has no instances)
+            # Determine if this check is vacuous
             is_vacuous = (
                 check.target_label in empty_labels
-                and check.type.value != "empty_shape"
+                and check.type != CheckType.EMPTY_SHAPE
+            ) or (
+                check.type in _PROPERTY_VACUOUS_TYPES
+                and check.property
+                and (check.target_label, check.property) in empty_props
             )
 
             # Skip no-op checks

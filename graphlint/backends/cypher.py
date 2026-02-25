@@ -10,6 +10,22 @@ from graphlint.parser import Check, CheckType, Severity
 class CypherBackend:
     name = "cypher"
 
+    def __init__(self, dialect: str = "neo4j"):
+        self.dialect = dialect
+
+    def _id_func(self, expr: str) -> str:
+        """Return the node/relationship identity function call for the current dialect."""
+        if self.dialect == "memgraph":
+            return f"id({expr})"
+        return f"elementId({expr})"
+
+    def _type_check(self, prop: str, expected_type: str) -> str:
+        """Generate a type-check expression, dialect-aware."""
+        if self.dialect == "memgraph":
+            # Memgraph lacks valueType(); fall back to basic type checks
+            return _memgraph_type_check(prop, expected_type)
+        return _cypher_type_check(prop, expected_type)
+
     def compile_check(self, check: Check) -> str:
         dispatch = {
             CheckType.PROPERTY_EXISTS: self._property_exists,
@@ -43,13 +59,13 @@ class CypherBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE n.{check.property} IS NULL\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       '{check.id}' AS check_id"
         )
 
     def _property_type(self, check: Check) -> str:
-        type_check = _cypher_type_check(check.property, check.expected_type)
+        type_check = self._type_check(check.property, check.expected_type)
 
         if check.only_if_exists:
             where = f"WHERE n.{check.property} IS NOT NULL AND {type_check}"
@@ -59,7 +75,7 @@ class CypherBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"{where}\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{check.property} AS actual_value,\n"
             f"       '{check.id}' AS check_id"
@@ -76,7 +92,7 @@ class CypherBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"{where}\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{check.property} AS actual_value,\n"
             f"       '{check.id}' AS check_id"
@@ -93,7 +109,7 @@ class CypherBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE n.{check.property} IS NOT NULL AND NOT n.{check.property} =~ '{regex}'\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{check.property} AS actual_value,\n"
             f"       '{check.id}' AS check_id"
@@ -111,7 +127,7 @@ class CypherBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE n.{check.property} IS NOT NULL AND ({where_clause})\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{check.property} AS actual_value,\n"
             f"       size(n.{check.property}) AS actual_length,\n"
@@ -134,7 +150,7 @@ class CypherBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE n.{check.property} IS NOT NULL AND ({where_clause})\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{check.property} AS actual_value,\n"
             f"       '{check.id}' AS check_id"
@@ -157,7 +173,7 @@ class CypherBackend:
             f"MATCH (n:{check.target_label})\n"
             f"WHERE n.{prop1} IS NOT NULL AND n.{prop2} IS NOT NULL\n"
             f"  AND {condition}\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{prop1} AS value1,\n"
             f"       n.{prop2} AS value2,\n"
@@ -210,7 +226,7 @@ class CypherBackend:
                 f"{target_filter}\n"
                 f"WITH n, count(r) AS rel_count\n"
                 f"WHERE {where}\n"
-                f"RETURN elementId(n) AS node_id,\n"
+                f"RETURN {self._id_func('n')} AS node_id,\n"
                 f"       labels(n) AS labels,\n"
                 f"       rel_count AS actual_count,\n"
                 f"       '{check.id}' AS check_id"
@@ -221,7 +237,7 @@ class CypherBackend:
             f"OPTIONAL MATCH {pattern}\n"
             f"WITH n, count(r) AS rel_count\n"
             f"WHERE {where}\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       rel_count AS actual_count,\n"
             f"       '{check.id}' AS check_id"
@@ -231,7 +247,7 @@ class CypherBackend:
         return (
             f"MATCH (s)-[r:{check.relationship.type}]->(t)\n"
             f"WHERE NOT (s:{check.target_label} AND t:{check.relationship.target_label})\n"
-            f"RETURN elementId(r) AS rel_id,\n"
+            f"RETURN {self._id_func('r')} AS rel_id,\n"
             f"       type(r) AS rel_type,\n"
             f"       labels(s) AS source_labels,\n"
             f"       labels(t) AS target_labels,\n"
@@ -267,7 +283,7 @@ class CypherBackend:
             f"  CASE WHEN {filter_cond} THEN [1] ELSE [] END\n"
             f"  ELSE [] END | x]) AS qcount\n"
             f"WHERE {where}\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       qcount AS qualified_count,\n"
             f"       '{check.id}' AS check_id"
@@ -286,7 +302,7 @@ class CypherBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE {cond}\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       '{check.id}' AS check_id"
         )
@@ -307,7 +323,7 @@ class CypherBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE {where}\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       '{check.id}' AS check_id"
         )
@@ -327,7 +343,7 @@ class CypherBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE {where}\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       '{check.id}' AS check_id"
         )
@@ -349,7 +365,7 @@ class CypherBackend:
             f"MATCH (n:{check.target_label})\n"
             f"WITH n, ({sum_expr}) AS satisfied_count\n"
             f"WHERE satisfied_count <> 1\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       satisfied_count,\n"
             f"       '{check.id}' AS check_id"
@@ -360,7 +376,7 @@ class CypherBackend:
         if check.type == CheckType.PROPERTY_EXISTS:
             return f"{node_var}.{check.property} IS NOT NULL"
         elif check.type == CheckType.PROPERTY_TYPE:
-            cypher_type = _cypher_type_check(check.property, check.expected_type)
+            cypher_type = self._type_check(check.property, check.expected_type)
             # Invert: _cypher_type_check returns "NOT type match", we want "type matches"
             return f"{node_var}.{check.property} IS NOT NULL AND NOT ({cypher_type})"
         elif check.type == CheckType.PROPERTY_VALUE_IN:
@@ -405,7 +421,7 @@ class CypherBackend:
             f"WITH label\n"
             f"MATCH (n) WHERE label IN labels(n)\n"
             f"WITH n, label LIMIT 1\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       [label] AS labels,\n"
             f"       label AS undeclared_label,\n"
             f"       '{check.id}' AS check_id"
@@ -419,7 +435,7 @@ class CypherBackend:
             f"WITH relationshipType\n"
             f"MATCH ()-[r]->() WHERE type(r) = relationshipType\n"
             f"WITH r, relationshipType LIMIT 1\n"
-            f"RETURN elementId(startNode(r)) AS node_id,\n"
+            f"RETURN {self._id_func('startNode(r)')} AS node_id,\n"
             f"       labels(startNode(r)) AS labels,\n"
             f"       relationshipType AS undeclared_type,\n"
             f"       '{check.id}' AS check_id"
@@ -432,7 +448,7 @@ class CypherBackend:
             f"WITH n, [k IN keys(n) WHERE NOT k IN {props_str}] AS extra\n"
             f"WHERE size(extra) > 0\n"
             f"UNWIND extra AS undeclared_key\n"
-            f"RETURN elementId(n) AS node_id,\n"
+            f"RETURN {self._id_func('n')} AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       undeclared_key AS undeclared_property,\n"
             f"       '{check.id}' AS check_id"
@@ -464,6 +480,18 @@ def _cypher_type_check(prop: str, expected_type: str) -> str:
     }
     cypher_type = type_map.get(expected_type, expected_type.upper())
     return f"NOT valueType(n.{prop}) STARTS WITH '{cypher_type}'"
+
+
+def _memgraph_type_check(prop: str, expected_type: str) -> str:
+    """Generate a Memgraph-compatible type check (no valueType() support)."""
+    # Memgraph doesn't have valueType(); use runtime type-checking workarounds
+    check_map = {
+        "string": f"NOT (n.{prop} + '' = n.{prop})",
+        "integer": f"NOT (toInteger(n.{prop}) = n.{prop} AND NOT toFloat(n.{prop}) <> n.{prop})",
+        "float": f"NOT (toFloat(n.{prop}) = n.{prop})",
+        "boolean": f"NOT (n.{prop} = true OR n.{prop} = false)",
+    }
+    return check_map.get(expected_type, "false  /* type check not supported in Memgraph */")
 
 
 def _cypher_list_literal(values: list) -> str:

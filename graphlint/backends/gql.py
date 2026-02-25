@@ -8,7 +8,7 @@ falling back to annotations where GQL diverges from Cypher.
 NOTE: GQL is still early in adoption. This backend tracks the ISO
 standard as implementations mature. Currently, the main differences
 from the Cypher backend are:
-  - element_id() instead of elementId()
+  - id() instead of elementId()
   - Slightly different function naming conventions
   - GQL uses VALUE TYPE instead of valueType() in some contexts
 """
@@ -45,14 +45,16 @@ class GQLBackend:
         }
         handler = dispatch.get(check.type)
         if handler is None:
-            raise NotImplementedError(f"Check type {check.type} not implemented for GQL backend")
+            raise NotImplementedError(
+                f"Check type {check.type} not implemented for GQL backend"
+            )
         return handler(check)
 
     def _property_exists(self, check: Check) -> str:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE n.{check.property} IS NULL\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       '{check.id}' AS check_id"
         )
@@ -68,7 +70,7 @@ class GQLBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"{where}\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{check.property} AS actual_value,\n"
             f"       '{check.id}' AS check_id"
@@ -85,7 +87,7 @@ class GQLBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"{where}\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{check.property} AS actual_value,\n"
             f"       '{check.id}' AS check_id"
@@ -101,7 +103,7 @@ class GQLBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE n.{check.property} IS NOT NULL AND NOT n.{check.property} =~ '{regex}'\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{check.property} AS actual_value,\n"
             f"       '{check.id}' AS check_id"
@@ -119,7 +121,7 @@ class GQLBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE n.{check.property} IS NOT NULL AND ({where_clause})\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{check.property} AS actual_value,\n"
             f"       size(n.{check.property}) AS actual_length,\n"
@@ -142,7 +144,7 @@ class GQLBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE n.{check.property} IS NOT NULL AND ({where_clause})\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{check.property} AS actual_value,\n"
             f"       '{check.id}' AS check_id"
@@ -165,7 +167,7 @@ class GQLBackend:
             f"MATCH (n:{check.target_label})\n"
             f"WHERE n.{prop1} IS NOT NULL AND n.{prop2} IS NOT NULL\n"
             f"  AND {condition}\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       n.{prop1} AS value1,\n"
             f"       n.{prop2} AS value2,\n"
@@ -213,7 +215,7 @@ class GQLBackend:
                 f"{target_filter}\n"
                 f"WITH n, count(r) AS rel_count\n"
                 f"WHERE {where}\n"
-                f"RETURN element_id(n) AS node_id,\n"
+                f"RETURN id(n) AS node_id,\n"
                 f"       labels(n) AS labels,\n"
                 f"       rel_count AS actual_count,\n"
                 f"       '{check.id}' AS check_id"
@@ -224,7 +226,7 @@ class GQLBackend:
             f"OPTIONAL MATCH {pattern}\n"
             f"WITH n, count(r) AS rel_count\n"
             f"WHERE {where}\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       rel_count AS actual_count,\n"
             f"       '{check.id}' AS check_id"
@@ -234,7 +236,7 @@ class GQLBackend:
         return (
             f"MATCH (s)-[r:{check.relationship.type}]->(t)\n"
             f"WHERE NOT (s:{check.target_label} AND t:{check.relationship.target_label})\n"
-            f"RETURN element_id(r) AS rel_id,\n"
+            f"RETURN id(r) AS rel_id,\n"
             f"       type(r) AS rel_type,\n"
             f"       labels(s) AS source_labels,\n"
             f"       labels(t) AS target_labels,\n"
@@ -267,7 +269,7 @@ class GQLBackend:
             f"  CASE WHEN {filter_cond} THEN [1] ELSE [] END\n"
             f"  ELSE [] END | x]) AS qcount\n"
             f"WHERE {where}\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       qcount AS qualified_count,\n"
             f"       '{check.id}' AS check_id"
@@ -285,7 +287,7 @@ class GQLBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE {cond}\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       '{check.id}' AS check_id"
         )
@@ -304,7 +306,7 @@ class GQLBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE {where}\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       '{check.id}' AS check_id"
         )
@@ -323,7 +325,7 @@ class GQLBackend:
         return (
             f"MATCH (n:{check.target_label})\n"
             f"WHERE {where}\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       '{check.id}' AS check_id"
         )
@@ -343,7 +345,7 @@ class GQLBackend:
             f"MATCH (n:{check.target_label})\n"
             f"WITH n, ({sum_expr}) AS satisfied_count\n"
             f"WHERE satisfied_count <> 1\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       satisfied_count,\n"
             f"       '{check.id}' AS check_id"
@@ -398,7 +400,7 @@ class GQLBackend:
             f"WITH label\n"
             f"MATCH (n) WHERE label IN labels(n)\n"
             f"WITH n, label LIMIT 1\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       [label] AS labels,\n"
             f"       label AS undeclared_label,\n"
             f"       '{check.id}' AS check_id"
@@ -412,7 +414,7 @@ class GQLBackend:
             f"WITH relationshipType\n"
             f"MATCH ()-[r]->() WHERE type(r) = relationshipType\n"
             f"WITH r, relationshipType LIMIT 1\n"
-            f"RETURN element_id(startNode(r)) AS node_id,\n"
+            f"RETURN id(startNode(r)) AS node_id,\n"
             f"       labels(startNode(r)) AS labels,\n"
             f"       relationshipType AS undeclared_type,\n"
             f"       '{check.id}' AS check_id"
@@ -425,7 +427,7 @@ class GQLBackend:
             f"WITH n, [k IN keys(n) WHERE NOT k IN {props_str}] AS extra\n"
             f"WHERE size(extra) > 0\n"
             f"UNWIND extra AS undeclared_key\n"
-            f"RETURN element_id(n) AS node_id,\n"
+            f"RETURN id(n) AS node_id,\n"
             f"       labels(n) AS labels,\n"
             f"       undeclared_key AS undeclared_property,\n"
             f"       '{check.id}' AS check_id"
