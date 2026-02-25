@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>graphlint — UML Diagram</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #0d1117; color: #c9d1d9; padding: 2rem; }
+    h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+    p.subtitle { color: #8b949e; margin-bottom: 2rem; font-size: 0.9rem; }
+    .mermaid { background: #ffffff; border-radius: 8px; padding: 2rem; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>graphlint package — UML Class Diagram</h1>
+  <p class="subtitle">Auto-generated from source. Modules: parser, shacl_parser, runner, backends</p>
+
+  <pre class="mermaid">
+classDiagram
+    direction LR
+
+    namespace parser {
+        class Severity {
+            &lt;&lt;Enum&gt;&gt;
+            VIOLATION
+            WARNING
+            INFO
+        }
+
+        class CheckType {
+            &lt;&lt;Enum&gt;&gt;
+            PROPERTY_EXISTS
+            PROPERTY_TYPE
+            PROPERTY_VALUE_IN
+            RELATIONSHIP_CARDINALITY
+            RELATIONSHIP_ENDPOINT
+            CLOSED_SHAPE
+            UNDECLARED_LABELS
+            UNDECLARED_RELATIONSHIP_TYPES
+            UNDECLARED_PROPERTIES
+            EMPTY_SHAPE
+        }
+
+        class RelationshipTarget {
+            &lt;&lt;dataclass&gt;&gt;
+            +str type
+            +str direction
+            +str target_label
+        }
+
+        class Check {
+            &lt;&lt;dataclass&gt;&gt;
+            +str id
+            +CheckType type
+            +Optional~str~ shape
+            +str target_label
+            +Severity severity
+            +str message
+            +Optional~str~ property
+            +Optional~str~ expected_type
+            +Optional~list~ allowed_values
+            +bool only_if_exists
+            +Optional~RelationshipTarget~ relationship
+            +Optional~int~ min_count
+            +Optional~int~ max_count
+            +Optional~list~str~~ allowed_properties
+            +Optional~list~str~~ allowed_relationships
+            +to_dict() dict
+        }
+
+        class Mapping {
+            &lt;&lt;dataclass&gt;&gt;
+            +dict classes_to_labels
+            +dict predicates_to_relationships
+            +dict predicates_to_properties
+            +label_for(iri) str
+            +property_for(iri) str
+            +relationship_for(iri) str
+            -_local_name(iri)$ str
+            -_to_upper_snake(name)$ str
+        }
+
+        class ValidationPlan {
+            &lt;&lt;dataclass&gt;&gt;
+            +str schema_source
+            +list~Check~ checks
+            +list~str~ shapes
+            +Mapping mapping
+            +to_dict() dict
+            +to_json(indent) str
+        }
+    }
+
+    namespace runner {
+        class ViolatingNode {
+            &lt;&lt;dataclass&gt;&gt;
+            +str node_id
+            +list~str~ labels
+            +dict extra
+        }
+
+        class CheckResult {
+            &lt;&lt;dataclass&gt;&gt;
+            +str check_id
+            +str check_type
+            +str severity
+            +str message
+            +Optional~str~ shape
+            +str target_label
+            +bool passed
+            +bool vacuous
+            +list~ViolatingNode~ violating_nodes
+            +str query
+            +violation_count int
+        }
+
+        class ValidationReport {
+            &lt;&lt;dataclass&gt;&gt;
+            +bool conforms
+            +str generated_at
+            +str schema_source
+            +str backend
+            +Optional~str~ target
+            +dict summary
+            +list~CheckResult~ results
+            +to_dict() dict
+            +to_json(indent) str
+            +print_table() str
+        }
+    }
+
+    namespace backends {
+        class Backend {
+            &lt;&lt;Protocol&gt;&gt;
+            +str name
+            +compile_check(check) str
+        }
+
+        class CypherBackend {
+            +str name = "cypher"
+            +compile_check(check) str
+            -_property_exists(check) str
+            -_property_type(check) str
+            -_property_value_in(check) str
+            -_relationship_cardinality(check) str
+            -_relationship_endpoint(check) str
+            -_undeclared_labels(check) str
+            -_undeclared_relationship_types(check) str
+            -_undeclared_properties(check) str
+            -_empty_shape(check) str
+        }
+
+        class GQLBackend {
+            +str name = "gql"
+            +compile_check(check) str
+            -_property_exists(check) str
+            -_property_type(check) str
+            -_property_value_in(check) str
+            -_relationship_cardinality(check) str
+            -_relationship_endpoint(check) str
+            -_undeclared_labels(check) str
+            -_undeclared_relationship_types(check) str
+            -_undeclared_properties(check) str
+            -_empty_shape(check) str
+        }
+    }
+
+    namespace functions {
+        class parse_schema {
+            &lt;&lt;function&gt;&gt;
+            +parse_schema(schema, mapping, source, strict, format) ValidationPlan
+        }
+
+        class parse_shacl_to_plan {
+            &lt;&lt;function&gt;&gt;
+            +parse_shacl_to_plan(turtle, mapping, source, strict) ValidationPlan
+        }
+
+        class runner_functions {
+            &lt;&lt;module: runner&gt;&gt;
+            +compile_plan(plan, backend) list
+            +dry_run(plan, backend) str
+            +execute_plan(plan, backend, driver, database, target_uri) ValidationReport
+        }
+    }
+
+    %% Composition / associations
+    Check --> CheckType
+    Check --> Severity
+    Check --> RelationshipTarget
+
+    ValidationPlan --> Check : checks *
+    ValidationPlan --> Mapping
+
+    CheckResult --> ViolatingNode : violating_nodes *
+    ValidationReport --> CheckResult : results *
+
+    CypherBackend ..|> Backend
+    GQLBackend ..|> Backend
+
+    Backend --> Check : compile_check()
+
+    %% Function relationships
+    parse_schema ..> ValidationPlan : returns
+    parse_shacl_to_plan ..> ValidationPlan : returns
+    runner_functions ..> ValidationPlan : takes as input
+    runner_functions ..> Backend : takes as input
+    runner_functions ..> ValidationReport : returns
+  </pre>
+
+  <script>mermaid.initialize({ startOnLoad: true, theme: "default" });</script>
+</body>
+</html>

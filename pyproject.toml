@@ -9,8 +9,6 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "pyshexc",
-    "ShExJSG",
     "rdflib>=7.0",
     "neo4j",
     "fastapi>=0.129.0",
