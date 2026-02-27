@@ -395,12 +395,6 @@
     <option value="neo4j">Neo4j</option>
     <option value="memgraph">Memgraph</option>
   </select>
-  <label>format</label>
-  <select id="schema-format" onchange="compile()">
-    <option value="auto">auto</option>
-    <option value="shexc">ShExC</option>
-    <option value="shacl">SHACL</option>
-  </select>
   <label style="display:flex;align-items:center;gap:4px;margin-left:8px;cursor:pointer;">
     <input type="checkbox" id="strict-mode" onchange="compile()">
     <span>strict</span>
@@ -413,7 +407,6 @@
     <div class="panel-header">
       <span>Schema</span>
       <span style="display:flex;gap:4px;">
-        <button class="btn-example" id="btn-shexc" onclick="loadExample('shexc')">ShExC</button>
         <button class="btn-example active" id="btn-shacl" onclick="loadExample('shacl')">SHACL</button>
       </span>
     </div>
@@ -444,18 +437,13 @@ const tabJson = document.getElementById('tab-json');
 const btnValidate = document.getElementById('btn-validate');
 
 // Examples
-const EXAMPLE_SHEXC = {{ example_shexc | tojson }};
 const EXAMPLE_SHACL = {{ example_shacl | tojson }};
 
 // Set initial example
 editor.value = EXAMPLE_SHACL;
-document.getElementById('schema-format').value = 'shacl';
 
 function loadExample(fmt) {
-  editor.value = fmt === 'shacl' ? EXAMPLE_SHACL : EXAMPLE_SHEXC;
-  document.getElementById('schema-format').value = fmt;
-  document.getElementById('btn-shexc').classList.toggle('active', fmt === 'shexc');
-  document.getElementById('btn-shacl').classList.toggle('active', fmt === 'shacl');
+  editor.value = EXAMPLE_SHACL;
   compile();
 }
 
@@ -509,7 +497,7 @@ async function compile() {
     const res = await fetch('/api/compile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schema: schema, format: document.getElementById('schema-format').value, strict: document.getElementById('strict-mode').checked, database_type: document.getElementById('database-type').value }),
+      body: JSON.stringify({ schema: schema, strict: document.getElementById('strict-mode').checked, database_type: document.getElementById('database-type').value }),
     });
     const data = await res.json();
 
@@ -525,8 +513,7 @@ async function compile() {
     const plan = data.plan;
     const checks = plan.checks || [];
 
-    const fmtLabel = data.detected_format ? ` [${data.detected_format}]` : '';
-    status.textContent = `${checks.length} checks from ${plan.shapes.length} shapes${fmtLabel}`;
+    status.textContent = `${checks.length} checks from ${plan.shapes.length} shapes`;
     status.className = 'status ok';
 
     renderChecks(checks, plan.shapes);
@@ -563,7 +550,7 @@ async function validate() {
     const res = await fetch('/api/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ schema: schema, format: document.getElementById('schema-format').value, bolt_uri: boltUri, username, password, strict: document.getElementById('strict-mode').checked, database_type: document.getElementById('database-type').value }),
+      body: JSON.stringify({ schema: schema, bolt_uri: boltUri, username, password, strict: document.getElementById('strict-mode').checked, database_type: document.getElementById('database-type').value }),
     });
     const data = await res.json();
 

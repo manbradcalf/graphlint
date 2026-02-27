@@ -2,7 +2,7 @@
 graphlint.shacl_parser — Parse SHACL/Turtle schemas into a validation plan (IR).
 
 Takes a SHACL schema in Turtle syntax, parses it via rdflib, then walks
-the graph to produce the same Check objects as the ShExC parser.
+the graph to produce Check objects for validation.
 """
 
 from __future__ import annotations

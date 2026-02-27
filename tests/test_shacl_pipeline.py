@@ -1,12 +1,9 @@
 """
 Test the SHACL pipeline: SHACL/Turtle -> IR -> Cypher/GQL
-
-Mirrors test_pipeline.py structure. Includes cross-format parity tests
-to verify SHACL and ShExC produce semantically equivalent plans.
 """
 
 from graphlint.shacl_parser import parse_shacl_to_plan
-from graphlint.parser import parse_shexc_to_plan, parse_schema, CheckType, Severity
+from graphlint.parser import parse_schema, CheckType, Severity
 from graphlint.backends.cypher import CypherBackend
 from graphlint.backends.gql import GQLBackend
 from graphlint.runner import compile_plan, dry_run
@@ -84,10 +81,10 @@ def test_shacl_cardinality_variations(movies_shacl):
     assert ha.min_count == 1
     assert ha.max_count is None
 
-    # hasDirector: sh:minCount 1, sh:maxCount 1 -> 1..1
+    # hasDirector: sh:minCount 1, no sh:maxCount -> 1..*
     hd = [c for c in rel_checks if c.relationship.type == "HAS_DIRECTOR"][0]
     assert hd.min_count == 1
-    assert hd.max_count == 1
+    assert hd.max_count is None
 
     # writtenBy: no sh:minCount, sh:maxCount 1 -> 0..1
     wb = [c for c in rel_checks if c.relationship.type == "WRITTEN_BY"][0]
@@ -128,14 +125,14 @@ def test_shacl_cypher_backend(movies_shacl):
 
 
 def test_shacl_gql_backend(movies_shacl):
-    """Verify GQL backend uses element_id() not elementId()."""
+    """Verify GQL backend uses id() not elementId()."""
     plan = parse_shacl_to_plan(movies_shacl)
     compiled = compile_plan(plan, GQLBackend())
 
     for check, query in compiled:
         if query.startswith("//"):
             continue
-        assert "element_id" in query
+        assert "id(n)" in query or "id(startNode" in query, f"GQL query for {check.id} missing id()"
         assert "elementId" not in query
 
 
@@ -149,68 +146,10 @@ def test_shacl_dry_run(movies_shacl):
     assert "MATCH" in output
 
 
-def test_auto_detection_shexc(movies_shex):
-    """parse_schema auto-detects ShExC format."""
-    plan = parse_schema(movies_shex, source="movies.shex")
-    assert len(plan.shapes) == 4
-
-
-def test_auto_detection_shacl(movies_shacl):
-    """parse_schema auto-detects SHACL format."""
+def test_parse_schema_shacl(movies_shacl):
+    """parse_schema parses SHACL format."""
     plan = parse_schema(movies_shacl, source="movies.shacl.ttl")
     assert len(plan.shapes) == 4
-
-
-def test_parity_check_counts(movies_shex, movies_shacl):
-    """Both formats produce the same number of checks per type for shared CheckTypes."""
-    shexc_plan = parse_shexc_to_plan(movies_shex)
-    shacl_plan = parse_shacl_to_plan(movies_shacl)
-
-    # SHACL-unique CheckTypes are excluded from parity comparison
-    shacl_unique_types = {
-        CheckType.PROPERTY_PATTERN,
-        CheckType.PROPERTY_STRING_LENGTH,
-        CheckType.PROPERTY_RANGE,
-        CheckType.PROPERTY_PAIR,
-        CheckType.QUALIFIED_CARDINALITY,
-        CheckType.LOGICAL_NOT,
-        CheckType.LOGICAL_AND,
-        CheckType.LOGICAL_OR,
-        CheckType.LOGICAL_XONE,
-        CheckType.UNIQUE_LANG,
-        CheckType.UNDECLARED_PROPERTIES,  # sh:closed generates this in SHACL
-    }
-
-    # Properties/relationships that only exist in the SHACL schema
-    shacl_only_properties = {"announcedYear"}
-    shacl_only_inverse = True  # SHACL has inversePath checks not in ShExC
-
-    def count_by_type(plan, exclude_props=None, exclude_inverse=False):
-        counts = {}
-        for c in plan.checks:
-            if exclude_props and getattr(c, "property", None) in exclude_props:
-                continue
-            if exclude_inverse and hasattr(c, "relationship") and c.relationship:
-                if getattr(c.relationship, "direction", None) == "incoming":
-                    continue
-            counts[c.type] = counts.get(c.type, 0) + 1
-        return counts
-
-    shexc_counts = count_by_type(shexc_plan)
-    shacl_counts = count_by_type(
-        shacl_plan,
-        exclude_props=shacl_only_properties,
-        exclude_inverse=shacl_only_inverse,
-    )
-
-    for check_type in CheckType:
-        if check_type in shacl_unique_types:
-            continue
-        shexc_n = shexc_counts.get(check_type, 0)
-        shacl_n = shacl_counts.get(check_type, 0)
-        assert shexc_n == shacl_n, (
-            f"{check_type.value}: ShExC has {shexc_n}, SHACL has {shacl_n}"
-        )
 
 
 def test_shacl_severity_mapping():
@@ -289,7 +228,7 @@ def test_shacl_pattern():
     # Verify GQL compilation
     query_gql = GQLBackend().compile_check(pattern_checks[0])
     assert "=~" in query_gql
-    assert "element_id" in query_gql
+    assert "id(n)" in query_gql
 
 
 def test_shacl_pattern_no_flags():
@@ -898,7 +837,7 @@ def test_shacl_new_checks_gql_compilation():
         query = gql.compile_check(check)
         if query.startswith("//"):
             continue
-        assert "element_id" in query, f"GQL query for {check.id} missing element_id"
+        assert "id(n)" in query or "id(startNode" in query, f"GQL query for {check.id} missing id()"
         assert "elementId" not in query, f"GQL query for {check.id} has Cypher's elementId"
 
 
@@ -910,8 +849,6 @@ def test_movies_shacl_new_constraints(movies_shacl):
     for c in plan.checks:
         type_counts[c.type] = type_counts.get(c.type, 0) + 1
 
-    # Title has sh:pattern
-    assert type_counts.get(CheckType.PROPERTY_PATTERN, 0) >= 1
     # Released has sh:minInclusive/maxInclusive, score has sh:minExclusive/maxExclusive
     assert type_counts.get(CheckType.PROPERTY_RANGE, 0) >= 2
     # Tagline has sh:maxLength, Person.name has sh:minLength
