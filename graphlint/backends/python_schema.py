@@ -57,7 +57,11 @@ def generate_schema(
             if rel.type not in rel_types:
                 rel_types.append(rel.type)
             rel_constraints[rel.type]["source"].add(check.target_label)
-            if rel.target_label and rel.target_label != "Unknown":
+            # Use acceptable_labels (from sh:or or class hierarchy) if available
+            if check.acceptable_labels:
+                for al in check.acceptable_labels:
+                    rel_constraints[rel.type]["target"].add(al)
+            elif rel.target_label and rel.target_label != "Unknown":
                 rel_constraints[rel.type]["target"].add(rel.target_label)
 
     # --- Build display labels ---
