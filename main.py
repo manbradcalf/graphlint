@@ -2,7 +2,7 @@ from graphlint.parser import parse_schema
 from graphlint.backends.cypher import CypherBackend
 from graphlint.runner import dry_run
 
-# ShExC example (also supports SHACL — try examples/movies.shacl.ttl)
+# SHACL example
 with open("examples/movies.shacl.ttl") as f:
     schema = f.read()
 

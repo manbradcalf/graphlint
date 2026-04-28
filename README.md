@@ -219,11 +219,11 @@ real-world graph databases. Some features are not yet implemented:
 **Planned**
 - Gremlin backend (Amazon Neptune, JanusGraph)
 - SPARQL backend for RDF stores
-- Schema-level validation (meta-SHACL, ShExC syntax checking)
+- Schema-level validation (meta-SHACL)
 - Complex SHACL paths (`sh:alternativePath`, sequence paths, `sh:zeroOrMorePath`, `sh:oneOrMorePath`)
 
 **LPG–RDF gap**
-Some SHACL/ShEx features assume RDF semantics that don't exist natively
+Some SHACL features assume RDF semantics that don't exist natively
 in labeled property graphs:
 
 | Feature | RDF Concept | LPG Status |
