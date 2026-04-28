@@ -701,6 +701,53 @@ def test_shacl_logical_or():
     assert "AND" in query  # sh:or violations use AND (all must fail)
 
 
+def test_shacl_logical_or_with_relationships():
+    """sh:or with relationship-style inner shapes (sh:node) emits
+    RELATIONSHIP_CARDINALITY sub-checks, not PROPERTY_EXISTS — so movies
+    with the relationship actually satisfy the OR.
+    """
+    turtle = """\
+    @prefix sh: <http://www.w3.org/ns/shacl#> .
+    @prefix ex: <http://example.org/movies#> .
+
+    ex:PersonShape
+        a sh:NodeShape ;
+        sh:targetClass ex:Person .
+
+    ex:MovieShape
+        a sh:NodeShape ;
+        sh:targetClass ex:Movie ;
+        sh:or (
+            [ sh:property [
+                sh:path ex:hasActor ;
+                sh:node ex:PersonShape ;
+                sh:minCount 1 ;
+            ] ]
+            [ sh:property [
+                sh:path ex:hasDirector ;
+                sh:node ex:PersonShape ;
+                sh:minCount 1 ;
+            ] ]
+        ) .
+    """
+    plan = parse_shacl_to_plan(turtle)
+    or_checks = [c for c in plan.checks if c.type == CheckType.LOGICAL_OR]
+    assert len(or_checks) == 1
+    subs = or_checks[0].sub_checks
+    assert len(subs) == 2
+    assert all(s.type == CheckType.RELATIONSHIP_CARDINALITY for s in subs)
+    rel_types = {s.relationship.type for s in subs}
+    assert rel_types == {"HAS_ACTOR", "HAS_DIRECTOR"}
+    for s in subs:
+        assert s.relationship.target_label == "Person"
+        assert s.min_count == 1
+
+    query = CypherBackend().compile_check(or_checks[0])
+    # Each branch should compile to an EXISTS subquery on the relationship
+    assert "EXISTS { (n)-[:HAS_ACTOR]->(:Person) }" in query
+    assert "EXISTS { (n)-[:HAS_DIRECTOR]->(:Person) }" in query
+
+
 def test_shacl_logical_and():
     """sh:and produces LOGICAL_AND check."""
     turtle = """\

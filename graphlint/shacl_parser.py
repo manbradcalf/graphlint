@@ -536,12 +536,16 @@ def _relationship_checks(
     if acceptable is None and class_hierarchy and target_class_iri and target_class_iri in class_hierarchy:
         acceptable = class_hierarchy[target_class_iri]
 
+    # A (0, ∞) cardinality can never fail — demote to INFO so the playground
+    # renders it as a schema fact rather than a pass/fail card.
+    check_severity = Severity.INFO if (min_count == 0 and max_count is None) else severity
+
     checks.append(Check(
         id=f"{label.lower()}-{rel_type.lower()}-cardinality",
         type=CheckType.RELATIONSHIP_CARDINALITY,
         shape=shape_iri,
         target_label=label,
-        severity=severity,
+        severity=check_severity,
         message=_rel_cardinality_message(label, rel_type, target_label, min_count, max_count),
         relationship=RelationshipTarget(
             type=rel_type,
@@ -710,13 +714,71 @@ def _parse_logical_inner(
     # Inner shape may have sh:property blocks
     for prop_node in g.objects(inner_node, SH.property):
         path = g.value(prop_node, SH.path)
-        if path is None or not isinstance(path, URIRef):
+        if path is None:
             continue
 
-        prop_name = mapping.property_for(str(path))
+        # Handle sh:inversePath for relationship-style inner shapes
+        direction = "outgoing"
+        if isinstance(path, BNode):
+            inverse = g.value(path, SH.inversePath)
+            if inverse is not None and isinstance(inverse, URIRef):
+                path = inverse
+                direction = "incoming"
+            else:
+                continue
+        if not isinstance(path, URIRef):
+            continue
+
+        path_iri = str(path)
+
+        # Detect relationship-style property shapes (sh:node / sh:class /
+        # sh:nodeKind sh:IRI). Without this, the inner sh:minCount would be
+        # interpreted as a node-property existence check, which always fails
+        # for relationships — making sh:or over relationships unsatisfiable.
+        node_kind = g.value(prop_node, SH.nodeKind)
+        sh_node = g.value(prop_node, SH.node)
+        sh_class = g.value(prop_node, SH["class"])
+        sh_datatype = g.value(prop_node, SH.datatype)
+
+        if _is_relationship_constraint(node_kind, sh_node, sh_class, sh_datatype):
+            rel_type = mapping.relationship_for(path_iri)
+            target_label = "Unknown"
+            if sh_node is not None:
+                target_class = g.value(sh_node, SH.targetClass)
+                if target_class is not None:
+                    target_label = mapping.label_for(str(target_class))
+                else:
+                    target_label = mapping.label_for(str(sh_node))
+            elif sh_class is not None:
+                target_label = mapping.label_for(str(sh_class))
+
+            sh_min_count = g.value(prop_node, SH.minCount)
+            sh_max_count = g.value(prop_node, SH.maxCount)
+            min_count = int(sh_min_count) if sh_min_count is not None else 0
+            max_count = int(sh_max_count) if sh_max_count is not None else None
+
+            checks.append(Check(
+                id=f"{label.lower()}-{rel_type.lower()}-inner-cardinality",
+                type=CheckType.RELATIONSHIP_CARDINALITY,
+                shape=shape_iri,
+                target_label=label,
+                severity=Severity.VIOLATION,
+                message=_rel_cardinality_message(
+                    label, rel_type, target_label, min_count, max_count
+                ),
+                relationship=RelationshipTarget(
+                    type=rel_type,
+                    direction=direction,
+                    target_label=target_label,
+                ),
+                min_count=min_count,
+                max_count=max_count,
+            ))
+            continue
+
+        prop_name = mapping.property_for(path_iri)
 
         # Extract simple constraints from inner property shape
-        sh_datatype = g.value(prop_node, SH.datatype)
         if sh_datatype is not None:
             dt_str = str(sh_datatype)
             lpg_type = XSD_TO_LPG_TYPE.get(dt_str, Mapping._local_name(dt_str))

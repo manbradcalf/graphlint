@@ -400,6 +400,23 @@ class CypherBackend:
             if check.max_exclusive is not None:
                 conds.append(f"{node_var}.{check.property} < {check.max_exclusive}")
             return " AND ".join(conds) if conds else "true"
+        elif check.type == CheckType.RELATIONSHIP_CARDINALITY:
+            rel = check.relationship
+            min_c = check.min_count if check.min_count is not None else 0
+            max_c = check.max_count
+            if rel.direction == "outgoing":
+                pattern = f"({node_var})-[:{rel.type}]->(:{rel.target_label})"
+            else:
+                pattern = f"({node_var})<-[:{rel.type}]-(:{rel.target_label})"
+            conds = []
+            if min_c == 1 and max_c is None:
+                conds.append(f"EXISTS {{ {pattern} }}")
+            else:
+                if min_c > 0:
+                    conds.append(f"COUNT {{ {pattern} }} >= {min_c}")
+                if max_c is not None:
+                    conds.append(f"COUNT {{ {pattern} }} <= {max_c}")
+            return " AND ".join(conds) if conds else "true"
         else:
             return "true"
 
