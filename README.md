@@ -29,6 +29,7 @@ flowchart LR
     subgraph backends ["backends/"]
         Cypher["cypher.pyNeo4j, Memgraph"]
         GQL["gql.pyISO GQL"]
+        PySchema["python_schema.pyPython module codegen"]
     end
 
     subgraph runner ["runner.py"]
@@ -39,6 +40,7 @@ flowchart LR
 
     subgraph output [" "]
         Report["Validation Report✓ pass / ✗ violationper node, per check"]
+        PyOut["Generated Python moduleentity & relationship constants"]
     end
 
     SHACL --> RDFLib
@@ -47,12 +49,13 @@ flowchart LR
     Compile --> Cypher & GQL
     Cypher & GQL --> Execute & DryRun
     Execute --> Report
+    IR --> PySchema --> PyOut
 ```
 
 1. **Write shapes in SHACL** — human-readable, formally grounded schema language
 2. **Parser** compiles shapes into a vendor-neutral validation plan (list of `Check` objects)
 3. **Mapping** converts RDF URIs to LPG names (labels, properties, relationship types) using conventions or explicit overrides
-4. **Backends** translate each check into an executable query (Cypher or GQL)
+4. **Backends** translate the plan into output: executable queries (Cypher, GQL) or generated source code (`python_schema`)
 5. **Runner** executes queries against your database; violations are collected into a report
 
 ## Quick start
@@ -61,7 +64,7 @@ flowchart LR
 uv run main.py
 ```
 
-### main.py
+### Example usage
 
 ```python
 from graphlint.parser import parse_schema
@@ -77,6 +80,9 @@ plan = parse_schema(schema, source="movies.shacl.ttl")
 
 # Dry run — see the generated queries without a database
 print(dry_run(plan, CypherBackend()))
+
+# Memgraph dialect — same backend, different dialect flag
+# print(dry_run(plan, CypherBackend(dialect="memgraph")))
 
 # Or execute against a live Neo4j instance
 from neo4j import GraphDatabase
@@ -149,32 +155,92 @@ Features:
 
 ## Backends
 
+### Query backends
+
 | Backend | Status  | Target databases            |
 | ------- | ------- | --------------------------- |
-| Cypher  | ✓       | Neo4j, Memgraph             |
+| Cypher  | ✓       | Neo4j (default), Memgraph (`CypherBackend(dialect="memgraph")`) |
 | GQL     | ✓       | ISO GQL-compliant databases |
 | Gremlin | planned | Amazon Neptune, JanusGraph  |
+
+### Code-generation backends
+
+| Backend         | Status | Output                                                                       |
+| --------------- | ------ | ---------------------------------------------------------------------------- |
+| `python_schema` | ✓      | Python module of typed constants (entity types, relationship types, source/target constraints) for use in extraction pipelines. Call `generate_schema(plan)` or `generate_schema_with_labels(plan, turtle)`. |
+
+`python_schema` lets non-validation code (LLM-based NER/relationship extraction, UI label maps, etc.) consume the same SHACL schema without re-parsing Turtle. The SHACL file stays the single source of truth.
+
+```python
+from graphlint.parser import parse_schema
+from graphlint.backends.python_schema import generate_schema
+
+with open("examples/movies.shacl.ttl") as f:
+    schema = f.read()
+
+plan = parse_schema(schema, source="movies.shacl.ttl")
+print(generate_schema(plan, shacl_source="movies.shacl.ttl"))
+```
+
+The generated module looks like:
+
+```python
+"""Schema constants auto-generated from SHACL by graphlint.
+
+Source: movies.shacl.ttl
+Generated: 2026-04-28T15:00:00Z
+"""
+
+ENTITY_TYPES: dict[str, str] = {
+    "Movie": "movie",
+    "Person": "person",
+    "Genre": "genre",
+    "Review": "review",
+}
+
+RELATIONSHIP_TYPES: list[str] = [
+    "HAS_ACTOR", "HAS_DIRECTOR", "IN_GENRE", "REVIEW_OF", "WRITTEN_BY",
+]
+
+RELATIONSHIP_DISPLAY_LABELS: dict[str, str] = {
+    "HAS_ACTOR": "has actor",
+    "HAS_DIRECTOR": "has director",
+    # ...
+}
+
+RELATIONSHIP_CONSTRAINTS: dict[str, dict[str, list[str]]] = {
+    "HAS_ACTOR":    {"source": ["Movie"], "target": ["Person"]},
+    "HAS_DIRECTOR": {"source": ["Movie"], "target": ["Person"]},
+    # ...
+}
+```
+
+Use `generate_schema_with_labels(plan, turtle)` instead if your shapes carry `rdfs:label` annotations — those replace the auto-generated display names.
 
 ## Project structure
 
 ```
 graphlint/
 ├── graphlint/
-│   ├── __init__.py          # Package metadata
-│   ├── parser.py            # Shared types, unified entry point
-│   ├── shacl_parser.py      # SHACL/Turtle → Validation Plan (IR)
-│   ├── runner.py            # Execute plan, produce reports
+│   ├── __init__.py            # Package metadata
+│   ├── parser.py              # Shared types, unified entry point
+│   ├── shacl_parser.py        # SHACL/Turtle → Validation Plan (IR)
+│   ├── runner.py              # Execute plan, produce reports
 │   └── backends/
-│       ├── __init__.py      # Backend protocol
-│       ├── cypher.py        # Cypher query generation
-│       └── gql.py           # GQL query generation
+│       ├── __init__.py        # Backend protocol
+│       ├── cypher.py          # Cypher query generation (Neo4j, Memgraph)
+│       ├── gql.py             # GQL query generation
+│       └── python_schema.py   # Python module codegen
 ├── examples/
-│   └── movies.shacl.ttl     # Example schema (SHACL)
+│   └── movies.shacl.ttl       # Example schema (SHACL)
 ├── templates/
-│   └── playground.html      # Playground UI template
-├── playground.py             # Interactive web playground
+│   └── playground.html        # Playground UI template
+├── playground.py              # Interactive web playground
+├── main.py                    # Minimal dry-run entry point
+├── SHECKYRSELF_SPEC.md        # Spec for the planned `graphlint check` CLI
 └── tests/
-    └── test_shacl_pipeline.py  # SHACL pipeline tests
+    ├── conftest.py
+    └── test_shacl_pipeline.py # SHACL pipeline tests
 ```
 
 ## Dependencies
@@ -194,7 +260,7 @@ graphlint/
 | **Database support** | Neo4j only | Neo4j, Memgraph, ISO GQL (Gremlin planned) |
 | **RDF import/export** | Full (Turtle, N-Triples, RDF/XML) | None |
 | **Ontology/inferencing** | OWL, RDFS, SKOS with class/property hierarchy reasoning | None |
-| **Transactional enforcement** | Yes — can roll back writes that violate constraints | No — read-only audit |
+| **Transactional enforcement** | Yes — can roll back writes that violate constraints | Read-only audit today; transactional `graphlint check` CLI is on the roadmap (see [SHECKYRSELF_SPEC.md](./SHECKYRSELF_SPEC.md)) |
 | **Dry-run / CI mode** | No — requires running Neo4j | Yes — generates queries without a database |
 | **Interactive tooling** | No | Web playground for live schema exploration |
 | **Target audience** | Semantic Web practitioners adopting Neo4j | Graph DB developers who want schema linting |
@@ -217,6 +283,7 @@ graphlint aims to be a practical bridge between formal graph schemas and
 real-world graph databases. Some features are not yet implemented:
 
 **Planned**
+- Transactional `graphlint check` CLI — execute a Cypher write inside a transaction, validate the resulting state, commit or rollback. See [SHECKYRSELF_SPEC.md](./SHECKYRSELF_SPEC.md).
 - Gremlin backend (Amazon Neptune, JanusGraph)
 - SPARQL backend for RDF stores
 - Schema-level validation (meta-SHACL)
